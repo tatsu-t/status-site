@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #080808;
+  --card: #111111;
+  --border: #1e1e1e;
+  --border-hover: #333;
+  --text: #e5e5e5;
+  --muted: #555;
+  --green: #22c55e;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --blue: #3b82f6;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
