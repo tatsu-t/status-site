@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
+import { dataPath } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 
 function loadPingWhitelist(): string[] {
   try {
-    const data = fs.readFileSync(path.join(process.cwd(), 'data', 'local-config.json'), 'utf-8');
+    const data = fs.readFileSync(dataPath('local-config.json'), 'utf-8');
     const config = JSON.parse(data);
     return config.ping_whitelist || ['127.0.0.1'];
   } catch {
@@ -44,9 +44,10 @@ function jsonHeaders() {
 }
 
 function handleDocker() {
+  const dockerSocket = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
   try {
     const output = execSync(
-      "curl -s --unix-socket /var/run/docker.sock 'http://localhost/containers/json?all=1'",
+      `curl -s --unix-socket ${dockerSocket} 'http://localhost/containers/json?all=1'`,
       { timeout: 5000 }
     );
     return NextResponse.json(JSON.parse(output.toString()), { headers: jsonHeaders() });
@@ -57,15 +58,16 @@ function handleDocker() {
 }
 
 function handleStorage() {
+  const storageMountPath = process.env.STORAGE_MOUNT_PATH || '/mnt/filesystem';
   try {
-    fs.accessSync('/mnt/filesystem', fs.constants.W_OK);
+    fs.accessSync(storageMountPath, fs.constants.W_OK);
     return NextResponse.json(
-      { status: 'active', path: '/mnt/filesystem', label: 'External SSD', type: 'hardware' },
+      { status: 'active', path: storageMountPath, label: 'External SSD', type: 'hardware' },
       { headers: jsonHeaders() }
     );
   } catch {
     return NextResponse.json(
-      { status: 'down', path: '/mnt/filesystem', label: 'External SSD', type: 'hardware' },
+      { status: 'down', path: storageMountPath, label: 'External SSD', type: 'hardware' },
       { headers: jsonHeaders() }
     );
   }

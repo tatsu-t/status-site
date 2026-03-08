@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import { jwtVerify } from 'jose';
 import fs from 'fs';
-import path from 'path';
+import { dataPath } from '@/lib/paths';
 
 export const dynamic = 'force-dynamic';
 
 function loadWolTargets(): Record<string, { mac: string; name: string; ip: string }> {
   try {
-    const data = fs.readFileSync(path.join(process.cwd(), 'data', 'wol-targets.json'), 'utf-8');
+    const data = fs.readFileSync(dataPath('wol-targets.json'), 'utf-8');
     return JSON.parse(data);
   } catch {
     return {};

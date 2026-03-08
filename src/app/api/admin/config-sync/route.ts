@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { writeFileSync } from 'fs';
 import { invalidateCache } from '@/lib/config';
+import { dataPath, ensureDataDir } from '@/lib/paths';
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('Authorization') || '';
@@ -17,9 +17,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid config' }, { status: 400 });
   }
 
-  const configPath = join(process.cwd(), 'data', 'config.json');
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-  writeFileSync(configPath, JSON.stringify(config, null, 2));
+  ensureDataDir();
+  writeFileSync(dataPath('config.json'), JSON.stringify(config, null, 2));
   invalidateCache();
 
   return NextResponse.json({ success: true });

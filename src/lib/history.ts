@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { dataPath, ensureDataDir } from './paths';
 
-import { join } from 'path';
-const HISTORY_FILE = join(process.cwd(), 'data', 'history.json');
+const HISTORY_FILE = dataPath('history.json');
 const MAX_HOURS = 90;
 
 export interface HourBucket {
@@ -24,7 +24,7 @@ function loadHistory(): HistoryStore {
 }
 
 function saveHistory(h: HistoryStore): void {
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
+  ensureDataDir();
   writeFileSync(HISTORY_FILE, JSON.stringify(h));
 }
 

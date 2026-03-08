@@ -21,7 +21,7 @@ async function autoRecoverHistory() {
     process.env.BACKUP_RECOVER_URL_2,
   ].filter(Boolean);
 
-  const localUrl = 'http://127.0.0.1:' + (process.env.PORT || '80');
+  const localUrl = 'http://127.0.0.1:' + (process.env.PORT || '3000');
 
   let totalMerged = 0;
 

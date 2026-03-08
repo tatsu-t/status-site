@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { ServiceConfig } from './config';
+import { dataPath } from './paths';
 
 const FAILURE_FILE = join(process.cwd(), 'failure_counts.json');
 const TIMEOUT_MS = 8000;
 
-const AGENT_STATES_FILE = join(process.cwd(), 'data', 'agent-states.json');
+const AGENT_STATES_FILE = dataPath('agent-states.json');
 const AGENT_TIMEOUT_MS = 120000;
 
 interface AgentState {

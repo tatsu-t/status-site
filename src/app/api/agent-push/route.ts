@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { loadConfig } from '@/lib/config';
-import { join } from 'path';
+import { dataPath, ensureDataDir } from '@/lib/paths';
 
-const STATES_FILE = join(process.cwd(), 'data', 'agent-states.json');
+const STATES_FILE = dataPath('agent-states.json');
 
 interface AgentState {
   hostname: string;
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   states[agent.id] = agentState;
 
   // Ensure data dir exists
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
+  ensureDataDir();
   writeFileSync(STATES_FILE, JSON.stringify(states, null, 2));
 
   // Relay to backup servers (fire-and-forget, non-blocking)

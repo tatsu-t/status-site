@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
 import { loadConfig, saveConfig, generateId } from '@/lib/config';
+import { dataPath } from '@/lib/paths';
 
-const PAIRS_PATH = join(process.cwd(), 'data', 'pending-pairs.json');
-const AGENTS_PATH = join(process.cwd(), 'data', 'pending-agents.json');
+const PAIRS_PATH = dataPath('pending-pairs.json');
+const AGENTS_PATH = dataPath('pending-agents.json');
 const TOKEN_EXPIRY_MS = 15 * 60 * 1000;
 
 interface PendingPair { token: string; created_at: string; }

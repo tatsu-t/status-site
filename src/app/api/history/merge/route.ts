@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { dataPath, ensureDataDir } from '@/lib/paths';
 
-const HISTORY_FILE = join(process.cwd(), 'data', 'history.json');
+const HISTORY_FILE = dataPath('history.json');
 
 interface HourBucket {
   hour: string;
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  mkdirSync(join(process.cwd(), 'data'), { recursive: true });
+  ensureDataDir();
   writeFileSync(HISTORY_FILE, JSON.stringify(local));
 
   return NextResponse.json({ merged });

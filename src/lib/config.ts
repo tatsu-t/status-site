@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { dataPath, ensureDataDir } from './paths';
 
 export interface ServiceAuth {
   user: string;
@@ -25,7 +25,7 @@ export interface AppConfig {
   group_order?: string[];
 }
 
-const CONFIG_PATH = join(process.cwd(), 'data', 'config.json');
+const CONFIG_PATH = dataPath('config.json');
 
 let cachedConfig: AppConfig | null = null;
 let cacheTime = 0;
@@ -56,8 +56,7 @@ export function invalidateCache(): void {
 }
 
 export function saveConfig(config: AppConfig): void {
-  const dir = dirname(CONFIG_PATH);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  ensureDataDir();
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
   cachedConfig = config;
   cacheTime = Date.now();

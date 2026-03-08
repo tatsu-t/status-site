@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { dataPath } from '@/lib/paths';
 
 export async function GET(req: NextRequest) {
   const agentId = req.nextUrl.searchParams.get('agentId');
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const svc = config.services.find((s: { id: string; type: string; auth?: { pass?: string } }) => s.id === agentId && s.type === 'agent-push');
   if (!svc || !svc.auth?.pass) return NextResponse.json({ containers: [] });
 
-  const statesFile = join(process.cwd(), 'data', 'agent-states.json');
+  const statesFile = dataPath('agent-states.json');
   if (!existsSync(statesFile)) return NextResponse.json({ containers: [] });
 
   const states = JSON.parse(readFileSync(statesFile, 'utf-8'));
