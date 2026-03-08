@@ -17,7 +17,11 @@ type HistoryStore = Record<string, HourBucket[]>;
 function loadHistory(): HistoryStore {
   try {
     if (existsSync(HISTORY_FILE)) {
-      return JSON.parse(readFileSync(HISTORY_FILE, 'utf-8'));
+      const parsed = JSON.parse(readFileSync(HISTORY_FILE, 'utf-8'));
+      if (Array.isArray(parsed) || typeof parsed !== 'object' || parsed === null) {
+        return {};
+      }
+      return parsed;
     }
   } catch {}
   return {};
