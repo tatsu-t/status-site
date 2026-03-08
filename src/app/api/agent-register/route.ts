@@ -24,7 +24,7 @@ function saveJSON<T>(path: string, data: T[]): void {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { token, name, ip, port, agent_key, group, cpu_percent, memory_percent, disk_percent } = body;
+  const { token, name, ip, agent_key, group, cpu_percent, memory_percent, disk_percent } = body;
 
   if (!token) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 });
@@ -70,7 +70,6 @@ export async function POST(req: NextRequest) {
   }
 
   const config = loadConfig();
-  const servicePort = port || 8765;
   const serviceName = name || 'Remote Agent';
   const serviceGroup = group || 'Remote Agents';
 

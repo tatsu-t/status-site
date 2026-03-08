@@ -59,19 +59,24 @@ const inputStyle: React.CSSProperties = {
 
 function useFetchConfig(router: ReturnType<typeof useRouter>) {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   const fetchConfig = useCallback(async () => {
     const res = await fetch('/api/admin/services');
     if (res.status === 401) { router.push('/login'); return; }
     const data = await res.json();
     setConfig(data);
-    setInitialized(true);
   }, [router]);
 
-  if (!initialized) {
-    fetchConfig();
-  }
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/services')
+      .then(res => {
+        if (res.status === 401) { router.push('/login'); return null; }
+        return res.json();
+      })
+      .then(data => { if (data && !cancelled) setConfig(data); });
+    return () => { cancelled = true; };
+  }, [router]);
 
   return { config, fetchConfig };
 }
