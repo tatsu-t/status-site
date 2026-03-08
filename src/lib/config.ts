@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { randomBytes } from 'crypto';
 import { dataPath, ensureDataDir } from './paths';
+import { withFileLock } from './file-lock';
 
 export interface ServiceAuth {
   user: string;
@@ -44,8 +46,13 @@ export function loadConfig(): AppConfig {
     cacheTime = now;
     return cachedConfig;
   }
-  const raw = readFileSync(CONFIG_PATH, 'utf-8');
-  cachedConfig = JSON.parse(raw) as AppConfig;
+  try {
+    const raw = readFileSync(CONFIG_PATH, 'utf-8');
+    cachedConfig = JSON.parse(raw) as AppConfig;
+  } catch (e) {
+    console.error('Failed to parse config.json, using defaults:', e);
+    cachedConfig = { ...DEFAULT_CONFIG, services: [] };
+  }
   cacheTime = now;
   return cachedConfig;
 }
@@ -56,12 +63,14 @@ export function invalidateCache(): void {
 }
 
 export function saveConfig(config: AppConfig): void {
-  ensureDataDir();
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  withFileLock(CONFIG_PATH, () => {
+    ensureDataDir();
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  });
   cachedConfig = config;
   cacheTime = Date.now();
 }
 
 export function generateId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  return randomBytes(12).toString('hex');
 }

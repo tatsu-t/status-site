@@ -11,7 +11,10 @@ function syncConfigToBackups(config: AppConfig) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${secret}` },
       body: JSON.stringify(config),
-    }).catch(() => {});
+      signal: AbortSignal.timeout(5000),
+    })
+      .then(r => { if (!r.ok) console.warn(`Config backup sync failed to ${url}: HTTP ${r.status}`); })
+      .catch(e => console.error(`Config backup sync error for ${url}:`, e.message));
   }
 }
 

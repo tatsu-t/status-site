@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { dataPath, ensureDataDir } from './paths';
+import { withFileLock } from './file-lock';
 
 const HISTORY_FILE = dataPath('history.json');
 const MAX_HOURS = 90;
@@ -33,29 +34,31 @@ function saveHistory(h: HistoryStore): void {
 }
 
 export function recordChecks(results: { id: string; status: 'up' | 'down' | 'unstable' }[]): void {
-  const h = loadHistory();
-  const now = new Date();
-  const hour = now.toISOString().slice(0, 13);
+  withFileLock(HISTORY_FILE, () => {
+    const h = loadHistory();
+    const now = new Date();
+    const hour = now.toISOString().slice(0, 13);
 
-  for (const r of results) {
-    if (!h[r.id]) h[r.id] = [];
-    const buckets = h[r.id];
+    for (const r of results) {
+      if (!h[r.id]) h[r.id] = [];
+      const buckets = h[r.id];
 
-    let bucket = buckets.find(b => b.hour === hour);
-    if (!bucket) {
-      bucket = { hour, up: 0, unstable: 0, down: 0, total: 0 };
-      buckets.push(bucket);
+      let bucket = buckets.find(b => b.hour === hour);
+      if (!bucket) {
+        bucket = { hour, up: 0, unstable: 0, down: 0, total: 0 };
+        buckets.push(bucket);
+      }
+
+      bucket[r.status]++;
+      bucket.total++;
+
+      if (buckets.length > MAX_HOURS) {
+        h[r.id] = buckets.slice(-MAX_HOURS);
+      }
     }
 
-    bucket[r.status]++;
-    bucket.total++;
-
-    if (buckets.length > MAX_HOURS) {
-      h[r.id] = buckets.slice(-MAX_HOURS);
-    }
-  }
-
-  saveHistory(h);
+    saveHistory(h);
+  });
 }
 
 export function getHistory(serviceId: string): HourBucket[] {

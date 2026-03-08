@@ -272,11 +272,17 @@ export default function AdminPage() {
   const [showPairWizard, setShowPairWizard] = useState(false);
   const router = useRouter();
   const { config, fetchConfig } = useFetchConfig(router);
+  const [error, setError] = useState<string | null>(null);
+
+  const showError = (msg: string) => {
+    setError(msg);
+    setTimeout(() => setError(null), 5000);
+  };
 
   const fetchContainersRef = useCallback((agentId: string) => {
     const controller = new AbortController();
     fetch(`/api/agent-docker-list?agentId=${agentId}`, { signal: controller.signal })
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
       .then(d => setAvailableContainers(d.containers || []))
       .catch(() => setAvailableContainers([]));
     return controller;
@@ -299,7 +305,7 @@ export default function AdminPage() {
       const controller = new AbortController();
       controllers.push(controller);
       fetch(`/api/agent-docker-list?agentId=${a.id}`, { signal: controller.signal })
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
         .then(d => { map[a.id] = d.containers || []; })
         .catch(() => {})
         .finally(() => { done++; if (done === agents.length) setDgContainerMap({...map}); });
@@ -342,46 +348,65 @@ export default function AdminPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!editing) return;
-    const svc = { ...editing };
-    if (svc.type === 'group' && dockerGroupSpecs.trim()) {
-      const specs = dockerGroupSpecs.split('\n').map(s => s.trim()).filter(Boolean).join(';');
-      svc.target = 'agent:' + specs;
+    try {
+      const svc = { ...editing };
+      if (svc.type === 'group' && dockerGroupSpecs.trim()) {
+        const specs = dockerGroupSpecs.split('\n').map(s => s.trim()).filter(Boolean).join(';');
+        svc.target = 'agent:' + specs;
+      }
+      if (authUser || authPass) {
+        svc.auth = { user: authUser, pass: authPass };
+      } else {
+        delete svc.auth;
+      }
+      if (!svc.docker_watch) delete svc.docker_watch;
+      if (!svc.systemd_watch) delete svc.systemd_watch;
+      const method = isNew ? 'POST' : 'PUT';
+      const res = await fetch('/api/admin/services', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(svc),
+      });
+      if (!res.ok) throw new Error(`Failed to ${isNew ? 'add' : 'update'} service`);
+      closeForm();
+      fetchConfig();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to save service');
     }
-    if (authUser || authPass) {
-      svc.auth = { user: authUser, pass: authPass };
-    } else {
-      delete svc.auth;
-    }
-    if (!svc.docker_watch) delete svc.docker_watch;
-    if (!svc.systemd_watch) delete svc.systemd_watch;
-    const method = isNew ? 'POST' : 'PUT';
-    await fetch('/api/admin/services', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(svc),
-    });
-    closeForm();
-    fetchConfig();
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/admin/services?id=${id}`, { method: 'DELETE' });
-    setDeleteConfirm(null);
-    fetchConfig();
+    try {
+      const res = await fetch(`/api/admin/services?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete service');
+      setDeleteConfirm(null);
+      fetchConfig();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete service');
+    }
   }
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to logout');
+    }
   }
 
   async function moveService(id: string, direction: 'up' | 'down') {
-    await fetch('/api/admin/services', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, direction }),
-    });
-    fetchConfig();
+    try {
+      const res = await fetch('/api/admin/services', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, direction }),
+      });
+      if (!res.ok) throw new Error('Failed to move service');
+      fetchConfig();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to move service');
+    }
   }
 
   const groupNames = (() => {
@@ -402,12 +427,17 @@ export default function AdminPage() {
     if (newIdx < 0 || newIdx >= groupNames.length) return;
     const arr = [...groupNames];
     [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
-    await fetch('/api/admin/group-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ group_order: arr }),
-    });
-    fetchConfig();
+    try {
+      const res = await fetch('/api/admin/group-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group_order: arr }),
+      });
+      if (!res.ok) throw new Error('Failed to reorder groups');
+      fetchConfig();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to reorder groups');
+    }
   }
 
   if (!config) {
@@ -420,6 +450,12 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808' }}><div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px' }}>
+      {error && (
+        <div style={{ background: '#dc2626', color: 'white', padding: '8px 16px', borderRadius: 8, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{error}</span>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 18 }}>✕</button>
+        </div>
+      )}
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: '#e5e5e5', margin: 0 }}>Services</h1>

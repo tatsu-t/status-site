@@ -70,7 +70,10 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Relay': 'true' },
         body: JSON.stringify(body),
-      }).catch(() => {});
+        signal: AbortSignal.timeout(5000),
+      })
+        .then(r => { if (!r.ok) console.warn(`Agent push relay failed to ${url}: HTTP ${r.status}`); })
+        .catch(e => console.error(`Agent push relay error for ${url}:`, e.message));
     }
   }
 

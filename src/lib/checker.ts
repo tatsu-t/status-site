@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
 import { ServiceConfig } from './config';
 import { dataPath } from './paths';
+import { withFileLock } from './file-lock';
 
-const FAILURE_FILE = join(process.cwd(), 'failure_counts.json');
+const FAILURE_FILE = dataPath('failure_counts.json');
 const TIMEOUT_MS = 8000;
 
 const AGENT_STATES_FILE = dataPath('agent-states.json');
@@ -115,6 +115,9 @@ function isActiveStatus(val: unknown): boolean {
 }
 
 async function fetchWithTimeout(url: string, headers: Record<string, string> = {}): Promise<{ ok: boolean; status: number; data: unknown; elapsed: number }> {
+  if (isBlockedUrl(url)) {
+    return { ok: false, status: 0, data: null, elapsed: 0 };
+  }
   const start = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -326,6 +329,29 @@ function isBlockedTcpTarget(ip: string): boolean {
   return false;
 }
 
+/** Block URLs targeting internal/private networks (SSRF protection for HTTP fetches) */
+function isBlockedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
+    if (hostname === '0.0.0.0') return true;
+    if (hostname === '169.254.169.254') return true;
+    // Block common private ranges when accessed via IP
+    const parts = hostname.split('.');
+    if (parts.length === 4 && parts.every(p => /^\d+$/.test(p))) {
+      const first = parseInt(parts[0]);
+      if (first === 10) return true;
+      if (first === 172 && parseInt(parts[1]) >= 16 && parseInt(parts[1]) <= 31) return true;
+      if (first === 192 && parseInt(parts[1]) === 168) return true;
+      if (first === 127) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function checkTcp(svc: ServiceConfig): Promise<{ up: boolean; elapsed: number; details?: Record<string, unknown> }> {
   let host: string;
   let port: number;
@@ -404,6 +430,9 @@ async function checkTcp(svc: ServiceConfig): Promise<{ up: boolean; elapsed: num
 }
 
 async function checkService(svc: ServiceConfig): Promise<{ up: boolean; elapsed: number; details?: Record<string, unknown> }> {
+  if (!svc.target || typeof svc.target !== 'string' || svc.target.trim() === '') {
+    return { up: false, elapsed: 0, details: { reason: 'Empty or invalid target' } };
+  }
   switch (svc.type) {
     case 'ping': return checkPing(svc);
     case 'docker': return checkDocker(svc);
@@ -413,7 +442,7 @@ async function checkService(svc: ServiceConfig): Promise<{ up: boolean; elapsed:
     case 'agent-push': return checkAgentPush(svc);
     case 'web': return checkWeb(svc);
     case 'tcp': return checkTcp(svc);
-    default: return { up: false, elapsed: 0 };
+    default: return { up: false, elapsed: 0, details: { reason: `Unknown service type: ${svc.type}` } };
   }
 }
 
@@ -462,6 +491,8 @@ export async function checkAllServices(services: ServiceConfig[]): Promise<Check
     })
   );
 
-  saveFailureCounts(counts);
+  withFileLock(FAILURE_FILE, () => {
+    saveFailureCounts(counts);
+  });
   return results;
 }
