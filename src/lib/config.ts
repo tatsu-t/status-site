@@ -11,8 +11,9 @@ export interface ServiceAuth {
 export interface ServiceConfig {
   id: string;
   name: string;
-  type: 'ping' | 'docker' | 'group' | 'external' | 'systemctl' | 'agent-push' | 'web' | 'tcp';
+  type: 'ping' | 'docker' | 'group' | 'external' | 'systemctl' | 'agent-push' | 'web' | 'tcp' | 'minecraft' | 'gamedig';
   target: string;
+  protocol?: string;
   auth?: ServiceAuth;
   group: string;
   icon: string;

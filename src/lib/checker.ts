@@ -429,8 +429,161 @@ async function checkTcp(svc: ServiceConfig): Promise<{ up: boolean; elapsed: num
   });
 }
 
+// --- GameDig-based game server check ---
+
+async function checkGameDig(svc: ServiceConfig): Promise<{ up: boolean; elapsed: number; details?: Record<string, unknown> }> {
+  const gameType = svc.protocol || 'minecraft';
+
+  const parsed = parseTcpTarget(svc.target);
+  if (!parsed) {
+    return { up: false, elapsed: 0, details: { reason: 'Invalid target format (expected host:port)' } };
+  }
+
+  const start = Date.now();
+  try {
+    const { GameDig } = await import('gamedig');
+    const result = await GameDig.query({
+      type: gameType,
+      host: parsed.host,
+      port: parsed.port,
+      maxRetries: 1,
+      socketTimeout: TIMEOUT_MS,
+    });
+    const elapsed = Date.now() - start;
+    return {
+      up: true,
+      elapsed: result.ping ?? elapsed,
+      details: {
+        server_name: result.name,
+        map: result.map || undefined,
+        players_online: result.players?.length ?? 0,
+        players_max: result.maxplayers ?? 0,
+        bots: result.bots?.length ?? 0,
+        game: gameType,
+        host: parsed.host,
+        port: parsed.port,
+        ...(result.players && result.players.length > 0 && result.players.length <= 20
+          ? { player_names: result.players.map((p: { name?: string }) => p.name).filter(Boolean) }
+          : {}),
+      },
+    };
+  } catch (e) {
+    return {
+      up: false,
+      elapsed: Date.now() - start,
+      details: { reason: (e as Error).message, game: gameType, host: parsed.host, port: parsed.port },
+    };
+  }
+}
+
+// --- Protocol-level checks for non-game services ---
+
+async function checkProtocol(svc: ServiceConfig): Promise<{ up: boolean; elapsed: number; details?: Record<string, unknown> }> {
+  const protocol = svc.protocol || 'tcp';
+  const parsed = parseTcpTarget(svc.target);
+  if (!parsed) {
+    return { up: false, elapsed: 0, details: { reason: 'Invalid target format' } };
+  }
+
+  const { host, port } = parsed;
+  const start = Date.now();
+  const { createConnection } = await import('net');
+
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port, timeout: TIMEOUT_MS });
+    let dataReceived = Buffer.alloc(0);
+
+    socket.on('connect', () => {
+      switch (protocol) {
+        case 'redis':
+          socket.write('PING\r\n');
+          break;
+        case 'smtp':
+        case 'ssh':
+        case 'ftp':
+        case 'mysql':
+          // These send banners/greetings on connect, just wait
+          break;
+        case 'http':
+          socket.write(`GET / HTTP/1.0\r\nHost: ${host}\r\n\r\n`);
+          break;
+        default:
+          socket.destroy();
+          resolve({ up: true, elapsed: Date.now() - start, details: { protocol, host, port } });
+          return;
+      }
+    });
+
+    socket.on('data', (data) => {
+      dataReceived = Buffer.concat([dataReceived, data]);
+      const text = dataReceived.toString('utf-8').trim();
+      const elapsed = Date.now() - start;
+      socket.destroy();
+
+      switch (protocol) {
+        case 'ssh':
+          resolve({
+            up: text.startsWith('SSH-'),
+            elapsed,
+            details: { protocol, banner: text.split('\n')[0].substring(0, 100), host, port },
+          });
+          break;
+        case 'smtp':
+          resolve({
+            up: text.startsWith('220'),
+            elapsed,
+            details: { protocol, banner: text.split('\n')[0].substring(0, 100), host, port },
+          });
+          break;
+        case 'ftp':
+          resolve({
+            up: text.startsWith('220'),
+            elapsed,
+            details: { protocol, banner: text.split('\n')[0].substring(0, 100), host, port },
+          });
+          break;
+        case 'redis':
+          resolve({
+            up: text.includes('+PONG'),
+            elapsed,
+            details: { protocol, response: text.substring(0, 50), host, port },
+          });
+          break;
+        case 'mysql':
+          resolve({
+            up: dataReceived.length > 4,
+            elapsed,
+            details: { protocol, greeting_length: dataReceived.length, host, port },
+          });
+          break;
+        case 'http': {
+          const statusMatch = text.match(/HTTP\/\d\.\d (\d{3})/);
+          resolve({
+            up: statusMatch ? parseInt(statusMatch[1]) < 500 : false,
+            elapsed,
+            details: { protocol, status: statusMatch?.[1], host, port },
+          });
+          break;
+        }
+        default:
+          resolve({ up: true, elapsed, details: { protocol, response_length: text.length, host, port } });
+      }
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve({ up: false, elapsed: Date.now() - start, details: { reason: 'Timeout', protocol, host, port } });
+    });
+
+    socket.on('error', (err) => {
+      socket.destroy();
+      resolve({ up: false, elapsed: Date.now() - start, details: { reason: err.message, protocol, host, port } });
+    });
+  });
+}
+
 async function checkService(svc: ServiceConfig): Promise<{ up: boolean; elapsed: number; details?: Record<string, unknown> }> {
-  if (!svc.target || typeof svc.target !== 'string' || svc.target.trim() === '') {
+  if (svc.type !== 'agent-push' && (!svc.target || typeof svc.target !== 'string' || svc.target.trim() === '')) {
     return { up: false, elapsed: 0, details: { reason: 'Empty or invalid target' } };
   }
   switch (svc.type) {
@@ -441,7 +594,9 @@ async function checkService(svc: ServiceConfig): Promise<{ up: boolean; elapsed:
     case 'systemctl': return checkSystemctl(svc);
     case 'agent-push': return checkAgentPush(svc);
     case 'web': return checkWeb(svc);
-    case 'tcp': return checkTcp(svc);
+    case 'tcp': return svc.protocol ? checkProtocol(svc) : checkTcp(svc);
+    case 'minecraft': return checkGameDig({ ...svc, protocol: svc.protocol || 'minecraft' });
+    case 'gamedig': return checkGameDig(svc);
     default: return { up: false, elapsed: 0, details: { reason: `Unknown service type: ${svc.type}` } };
   }
 }

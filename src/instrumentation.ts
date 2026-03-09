@@ -10,6 +10,23 @@ export async function register() {
       console.error('[auto-recover] Failed:', e);
     }
   }, 15000);
+
+  // Background status checker — hits /api/status every 2 minutes so
+  // history is recorded even when no one is viewing the dashboard.
+  const port = process.env.PORT || '3000';
+  const localApi = `http://127.0.0.1:${port}/api/status`;
+  setTimeout(() => {
+    const runCheck = async () => {
+      try {
+        await fetch(localApi, { signal: AbortSignal.timeout(30_000) });
+      } catch (e) {
+        console.error('[bg-checker] Failed:', e);
+      }
+    };
+    runCheck();
+    setInterval(runCheck, 120_000);
+    console.log('[bg-checker] Started — polling every 2 min');
+  }, 30_000);
 }
 
 async function autoRecoverHistory() {

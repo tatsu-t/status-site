@@ -11,7 +11,11 @@ export async function GET() {
   try {
     const config = loadConfig();
     const results = await checkAllServices(config.services);
-    recordChecks(results.map(r => ({ id: r.id, status: r.status })));
+    try {
+      recordChecks(results.map(r => ({ id: r.id, status: r.status })));
+    } catch (e) {
+      console.error('[history]', e);
+    }
     return NextResponse.json(
       { services: results, checked_at: new Date().toISOString(), group_order: config.group_order || [], server_name: os.hostname() },
       {
