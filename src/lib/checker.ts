@@ -1,7 +1,32 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { ServiceConfig } from './config';
-import { dataPath } from './paths';
+import { dataPath, ensureDataDir } from './paths';
 import { withFileLock } from './file-lock';
+
+const CACHE_FILE = dataPath('last-status.json');
+
+export interface CachedStatus {
+  timestamp: number;
+  services: CheckResult[];
+}
+
+export function saveLastResults(results: CheckResult[]): void {
+  try {
+    ensureDataDir();
+    writeFileSync(CACHE_FILE, JSON.stringify({ timestamp: Date.now(), services: results }));
+  } catch (e) {
+    console.error('[cache] Failed to save status cache:', e);
+  }
+}
+
+export function loadLastResults(): CachedStatus | null {
+  try {
+    const raw = readFileSync(CACHE_FILE, 'utf-8');
+    return JSON.parse(raw) as CachedStatus;
+  } catch {
+    return null;
+  }
+}
 
 const FAILURE_FILE = dataPath('failure_counts.json');
 const TIMEOUT_MS = 8000;
@@ -446,8 +471,8 @@ async function checkGameDig(svc: ServiceConfig): Promise<{ up: boolean; elapsed:
       type: gameType,
       host: parsed.host,
       port: parsed.port,
-      maxRetries: 1,
-      socketTimeout: TIMEOUT_MS,
+      maxRetries: 0,
+      socketTimeout: 3000,
     });
     const elapsed = Date.now() - start;
     return {

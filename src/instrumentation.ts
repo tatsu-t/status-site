@@ -11,21 +11,29 @@ export async function register() {
     }
   }, 15000);
 
-  // Background status checker — hits /api/status every 2 minutes so
-  // history is recorded even when no one is viewing the dashboard.
-  const port = process.env.PORT || '3000';
-  const localApi = `http://127.0.0.1:${port}/api/status`;
+  // Background status checker — runs checks every 2 minutes and caches results.
+  // Frontend /api/status reads cached results for instant response.
   setTimeout(() => {
+    const localUrl = 'http://127.0.0.1:' + (process.env.PORT || '3000');
     const runCheck = async () => {
       try {
-        await fetch(localApi, { signal: AbortSignal.timeout(30_000) });
+        const res = await fetch(`${localUrl}/api/status/check`, {
+          method: 'POST',
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (res.ok) {
+          const data = await res.json() as { checked?: number };
+          console.log(`[bg-checker] Checked ${data.checked ?? '?'} services`);
+        } else {
+          console.error(`[bg-checker] HTTP ${res.status}`);
+        }
       } catch (e) {
         console.error('[bg-checker] Failed:', e);
       }
     };
     runCheck();
     setInterval(runCheck, 120_000);
-    console.log('[bg-checker] Started — polling every 2 min');
+    console.log('[bg-checker] Started — checking every 2 min');
   }, 30_000);
 }
 
