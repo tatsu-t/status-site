@@ -11,9 +11,26 @@ export async function GET() {
     const config = loadConfig();
     const cached = loadLastResults();
     if (cached) {
+      const cachedMap = new Map(cached.services.map(s => [s.id, s]));
+      const mergedServices = config.services.map(svc => {
+        const cachedSvc = cachedMap.get(svc.id);
+        if (cachedSvc) return cachedSvc;
+        // New service not yet in cache - show as unknown
+        return {
+          id: svc.id,
+          name: svc.name,
+          is_up: false,
+          status: 'unknown' as const,
+          group: svc.group || '',
+          response_time_ms: 0,
+          failure_count: 0,
+          icon: svc.icon || 'bi-globe',
+          type: svc.type,
+        };
+      });
       return NextResponse.json(
         {
-          services: cached.services,
+          services: mergedServices,
           checked_at: new Date(cached.timestamp).toISOString(),
           cached: true,
           group_order: config.group_order || [],

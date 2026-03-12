@@ -25,7 +25,10 @@ interface PendingAgent {
 
 function loadJSON<T>(path: string): T[] {
   if (!existsSync(path)) return [];
-  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return []; }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
 }
 
 function saveJSON<T>(path: string, data: T[]): void {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { loadConfig, saveConfig, generateId } from '@/lib/config';
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs';
+import { loadConfig, saveConfig, generateId, invalidateCache } from '@/lib/config';
 import { dataPath } from '@/lib/paths';
 
 const PAIRS_PATH = dataPath('pending-pairs.json');
@@ -14,7 +14,10 @@ interface PendingAgent {
 
 function loadJSON<T>(path: string): T[] {
   if (!existsSync(path)) return [];
-  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return []; }
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
 }
 
 function saveJSON<T>(path: string, data: T[]): void {
@@ -44,6 +47,8 @@ export async function POST(req: NextRequest) {
     auth: { user: 'agent', pass: agent.agent_key },
   });
   saveConfig(config);
+  invalidateCache();
+  try { unlinkSync(dataPath('last-status.json')); } catch {}
 
   // Remove from pending lists
   const remainingAgents = agents.filter(a => a.token !== token);
